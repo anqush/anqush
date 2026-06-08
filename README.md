@@ -29,22 +29,37 @@ Anqush intercepts tool calls across frameworks to enforce:
 
 ## Quick Start
 
-### 1. Start the control plane
+### 1. Install
 
 ```bash
-uv sync
-uv run uvicorn server.main:app --host 0.0.0.0 --port 8000
+pip install anqush
 ```
 
-Or with Docker:
+Or with specific adapters:
 
 ```bash
-docker-compose up
+pip install anqush[openai]       # OpenAI SDK
+pip install anqush[langgraph]    # LangGraph
+pip install anqush[mcp]          # MCP
+pip install anqush[all]          # Everything
 ```
 
-The dashboard is at http://localhost:8080 and the API at http://localhost:8000.
+### 2. Start the control plane
 
-### 2. Register an agent
+Use the [reference server](https://github.com/anqush/anqush-server) for local development:
+
+```bash
+# Option A: Docker
+docker run -p 8000:8000 ghcr.io/anqush/anqush-server:latest
+
+# Option B: Install and run
+pip install anqush-server
+uvicorn server.main:app --host 0.0.0.0 --port 8000
+```
+
+Or use the hosted service at [api.anqush.dev](https://api.anqush.dev).
+
+### 3. Register an agent
 
 ```bash
 curl -X POST http://localhost:8000/api/agents \
@@ -52,7 +67,7 @@ curl -X POST http://localhost:8000/api/agents \
   -d '{"id":"my-agent","name":"My Agent","max_session_cost":10.0,"max_daily_cost":100.0}'
 ```
 
-### 3. Add a rule
+### 4. Add a rule
 
 ```bash
 curl -X POST http://localhost:8000/api/agents/my-agent/rules \
@@ -66,7 +81,7 @@ curl -X POST http://localhost:8000/api/agents/my-agent/rules \
   }'
 ```
 
-### 4. Wrap your agent
+### 5. Wrap your agent
 
 #### OpenAI SDK
 
@@ -131,14 +146,18 @@ asyncio.run(proxy.run_sse(port=8001))
 │                            │  ├── approvals.py              │
 │                            │  └── models.py   (Data types)  │
 ├─────────────────────────────────────────────────────────────┤
-│              Framework-specific adapters                     │
-│         (intercept tool calls, apply controls)               │
+│  protocol/                                                   │
+│  ├── types.py       (Pydantic models from openapi.yaml)     │
+│  ├── transport.py   (Abstract Transport interface)          │
+│  ├── http.py        (HTTPTransport)                         │
+│  └── local.py       (LocalTransport for testing)            │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Control Plane (API)                        │
-│              FastAPI + SQLite (self-hosted)                  │
+│         [Reference](https://github.com/anqush/anqush-server)│
+│         [Hosted](https://api.anqush.dev)                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -159,6 +178,15 @@ asyncio.run(proxy.run_sse(port=8001))
 | `adapters/openai.py` | OpenAI SDK | Wraps client, intercepts `chat.completions.create` |
 | `adapters/langgraph.py` | LangGraph | Wraps `ToolNode`, uses `interrupt()` for approvals |
 | `adapters/mcp.py` | MCP | Proxy server, intercepts all tool calls |
+
+### Protocol
+
+| Module | Purpose |
+|--------|---------|
+| `protocol/types.py` | Pydantic models matching the [Anqush Protocol spec](docs/protocol/openapi.yaml) |
+| `protocol/transport.py` | Abstract Transport interface |
+| `protocol/http.py` | HTTPTransport for talking to control planes |
+| `protocol/local.py` | LocalTransport for in-process testing |
 
 ---
 
@@ -189,20 +217,24 @@ Supported conditions: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`, `s
 
 ---
 
-## API Endpoints
+## Protocol
 
+The [Anqush Protocol](docs/protocol/openapi.yaml) is an open spec for SDK-server communication. Any server that implements it can be used with this SDK.
+
+**Protocol endpoints:**
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/agents` | POST | Register an agent |
-| `/api/agents` | GET | List agents |
-| `/api/agents/{id}/rules` | POST | Create a rule |
-| `/api/agents/{id}/rules` | GET | List rules |
+| `/api/agents/{id}/rules` | GET | Fetch rules for an agent |
+| `/api/agents/{id}/budget` | GET | Fetch budget for an agent |
 | `/api/approvals` | POST | Request approval |
-| `/api/approvals/{id}` | GET | Get approval status |
-| `/api/approvals/{id}/approve` | POST | Approve |
-| `/api/approvals/{id}/reject` | POST | Reject |
-| `/api/audit` | POST | Log audit event |
-| `/api/audit` | GET | Query audit log |
+| `/api/approvals/{id}` | GET | Poll approval status |
+| `/api/approvals/{id}/resolve` | POST | Resolve approval |
+| `/api/audit` | POST | Submit audit event(s) |
+| `/health` | GET | Liveness probe |
+
+**Implementations:**
+- [anqush-server](https://github.com/anqush/anqush-server) — self-hostable reference (SQLite, single-tenant)
+- [api.anqush.dev](https://api.anqush.dev) — hosted service (PostgreSQL, multi-tenant)
 
 ---
 
@@ -212,8 +244,11 @@ Supported conditions: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`, `s
 # Run all tests
 uv run pytest tests/
 
-# With coverage
+# Run with coverage
 uv run pytest tests/ --cov=anqush --cov-report=term-missing
+
+# Run protocol conformance tests against a server
+ANQUSH_URL=http://localhost:8000 uv run pytest tests/test_protocol/
 ```
 
 **Coverage:** 80%+ (configured as minimum in `pyproject.toml`)
@@ -228,16 +263,18 @@ uv run pytest tests/ --cov=anqush --cov-report=term-missing
 - [x] OpenAI adapter (`anqush/adapters/openai.py`)
 - [x] LangGraph adapter (`anqush/adapters/langgraph.py`)
 - [x] MCP adapter (`anqush/adapters/mcp.py`)
-- [x] Test suite (118 tests, 80%+ coverage)
+- [x] Protocol layer (`anqush/protocol/`)
+- [x] Contract test suite (`tests/test_protocol/`)
+- [x] Reference server rebuilt against spec
 
 ### Phase 2: Hosted Control Plane (Next)
 
 - [ ] Multi-tenancy (organizations, projects, environments)
-- [ ] JWT-based auth (or Clerk/Auth0)
-- [ ] PostgreSQL (replace SQLite)
+- [ ] Clerk auth
+- [ ] PostgreSQL via SQLModel (Neon)
 - [ ] Redis for async job queue
 - [ ] Async approvals (webhook + Slack)
-- [ ] Multi-tenant dashboard (React/Vue)
+- [ ] Next.js dashboard
 
 ### Phase 3: Commercial Features
 
@@ -260,4 +297,4 @@ uv run pytest tests/ --cov=anqush --cov-report=term-missing
 
 ## License
 
-MIT
+Apache-2.0
