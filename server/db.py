@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
@@ -55,6 +56,8 @@ class Database:
                 status TEXT NOT NULL DEFAULT 'pending',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 resolved_at TEXT,
+                resolved_by TEXT,
+                comment TEXT,
                 FOREIGN KEY (agent_id) REFERENCES agents(id)
             );
 
@@ -84,12 +87,26 @@ class Database:
     # ─── Agents ───────────────────────────────────────────────────────────────
 
     def create_agent(self, agent: Any) -> dict:
+        return self.create_agent_raw(
+            id=agent.id,
+            name=agent.name,
+            max_session_cost=agent.max_session_cost,
+            max_daily_cost=agent.max_daily_cost,
+        )
+
+    def create_agent_raw(
+        self,
+        id: str,
+        name: str,
+        max_session_cost: float | None = None,
+        max_daily_cost: float | None = None,
+    ) -> dict:
         self.conn.execute(
             "INSERT INTO agents (id, name, max_session_cost, max_daily_cost) VALUES (?, ?, ?, ?)",
-            (agent.id, agent.name, agent.max_session_cost, agent.max_daily_cost),
+            (id, name, max_session_cost, max_daily_cost),
         )
         self.conn.commit()
-        return self.get_agent(agent.id)
+        return self.get_agent(id)
 
     def list_agents(self) -> list[dict]:
         rows = self.conn.execute("SELECT * FROM agents ORDER BY created_at DESC").fetchall()
@@ -102,11 +119,27 @@ class Database:
     # ─── Rules ────────────────────────────────────────────────────────────────
 
     def create_rule(self, agent_id: str, rule: Any) -> dict:
-        import json
+        return self.create_rule_raw(
+            agent_id=agent_id,
+            name=rule.name,
+            action=rule.action,
+            tool=rule.tool,
+            when=rule.when,
+            reason=rule.reason,
+        )
 
+    def create_rule_raw(
+        self,
+        agent_id: str,
+        name: str,
+        action: str,
+        tool: str = "*",
+        when: dict | None = None,
+        reason: str | None = None,
+    ) -> dict:
         cur = self.conn.execute(
             "INSERT INTO rules (agent_id, name, action, tool, when_json, reason) VALUES (?, ?, ?, ?, ?, ?)",
-            (agent_id, rule.name, rule.action, rule.tool, json.dumps(rule.when), rule.reason),
+            (agent_id, name, action, tool, json.dumps(when or {}), reason),
         )
         self.conn.commit()
         return self._get_rule(cur.lastrowid)
@@ -122,8 +155,6 @@ class Database:
         return self._format_rule(row)
 
     def _format_rule(self, row: sqlite3.Row) -> dict:
-        import json
-
         d = dict(row)
         d["when"] = json.loads(d.pop("when_json", "{}"))
         return d
@@ -135,24 +166,43 @@ class Database:
     # ─── Approvals ────────────────────────────────────────────────────────────
 
     def create_approval(self, req: Any) -> dict:
-        import json
+        return self.create_approval_raw(
+            id=str(uuid.uuid4())[:8],
+            agent_id=req.agent_id,
+            tool=req.tool,
+            params=req.params,
+            rule=req.rule,
+        )
 
-        approval_id = str(uuid.uuid4())[:8]
+    def create_approval_raw(
+        self,
+        id: str,
+        agent_id: str,
+        tool: str,
+        params: dict,
+        rule: dict,
+    ) -> dict:
         self.conn.execute(
             "INSERT INTO approvals (id, agent_id, tool, params_json, rule_json) VALUES (?, ?, ?, ?, ?)",
-            (approval_id, req.agent_id, req.tool, json.dumps(req.params), json.dumps(req.rule)),
+            (id, agent_id, tool, json.dumps(params), json.dumps(rule)),
         )
         self.conn.commit()
-        return self.get_approval(approval_id)
+        return self.get_approval(id)
 
     def get_approval(self, approval_id: str) -> dict | None:
         row = self.conn.execute("SELECT * FROM approvals WHERE id = ?", (approval_id,)).fetchone()
         return self._format_approval(row) if row else None
 
-    def resolve_approval(self, approval_id: str, status: str) -> dict | None:
+    def resolve_approval(
+        self,
+        approval_id: str,
+        status: str,
+        resolved_by: str | None = None,
+        comment: str | None = None,
+    ) -> dict | None:
         self.conn.execute(
-            "UPDATE approvals SET status = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (status, approval_id),
+            "UPDATE approvals SET status = ?, resolved_at = CURRENT_TIMESTAMP, resolved_by = ?, comment = ? WHERE id = ?",
+            (status, resolved_by, comment, approval_id),
         )
         self.conn.commit()
         return self.get_approval(approval_id)
@@ -171,8 +221,6 @@ class Database:
         return [self._format_approval(r) for r in rows]
 
     def _format_approval(self, row: sqlite3.Row) -> dict:
-        import json
-
         d = dict(row)
         d["params"] = json.loads(d.pop("params_json", "{}"))
         d["rule"] = json.loads(d.pop("rule_json", "{}"))
@@ -181,19 +229,39 @@ class Database:
     # ─── Audit ────────────────────────────────────────────────────────────────
 
     def log_audit(self, event: Any) -> None:
-        import json
+        self.log_audit_raw(
+            agent_id=event.agent_id,
+            tool=event.tool,
+            params=event.params,
+            result=event.result,
+            status=event.status,
+            reason=event.reason,
+            cost=event.cost,
+            duration_ms=event.duration_ms,
+        )
 
+    def log_audit_raw(
+        self,
+        agent_id: str,
+        tool: str,
+        params: dict,
+        result: Any = None,
+        status: str = "success",
+        reason: str | None = None,
+        cost: float = 0.0,
+        duration_ms: float = 0.0,
+    ) -> None:
         self.conn.execute(
             "INSERT INTO audit (agent_id, tool, params_json, result_json, status, reason, cost, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                event.agent_id,
-                event.tool,
-                json.dumps(event.params),
-                json.dumps(event.result) if event.result is not None else None,
-                event.status,
-                event.reason,
-                event.cost,
-                event.duration_ms,
+                agent_id,
+                tool,
+                json.dumps(params),
+                json.dumps(result) if result is not None else None,
+                status,
+                reason,
+                cost,
+                duration_ms,
             ),
         )
         self.conn.commit()
@@ -210,8 +278,6 @@ class Database:
         return [self._format_audit(r) for r in rows]
 
     def _format_audit(self, row: sqlite3.Row) -> dict:
-        import json
-
         d = dict(row)
         d["params"] = json.loads(d.pop("params_json", "{}"))
         result = d.pop("result_json", None)

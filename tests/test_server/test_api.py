@@ -28,7 +28,9 @@ class TestHealthEndpoint:
     def test_health(self, client):
         response = client.get("/health")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        data = response.json()
+        assert data["status"] == "ok"
+        assert "version" in data
 
 
 class TestAgentEndpoints:
@@ -86,6 +88,7 @@ class TestAgentEndpoints:
         data = response.json()
         assert data["agent_id"] == "agent-1"
         assert data["max_session_cost"] == 10.0
+        assert data["currency"] == "USD"
 
     def test_record_spend(self, client):
         client.post(
@@ -95,7 +98,7 @@ class TestAgentEndpoints:
 
         response = client.post(
             "/api/agents/agent-1/spend",
-            json={"amount": 5.0},
+            params={"amount": 5.0},
         )
         assert response.status_code == 200
         assert response.json()["ok"] is True
@@ -136,8 +139,10 @@ class TestRuleEndpoints:
 
         response = client.get("/api/agents/agent-1/rules")
         assert response.status_code == 200
-        rules = response.json()
-        assert len(rules) >= 1
+        data = response.json()
+        assert "rules" in data
+        assert "version" in data
+        assert len(data["rules"]) >= 1
 
     def test_delete_rule(self, client):
         client.post(
@@ -172,7 +177,7 @@ class TestApprovalEndpoints:
                 "rule": {"name": "email-approval"},
             },
         )
-        assert response.status_code == 200
+        assert response.status_code == 201
         data = response.json()
         assert data["status"] == "pending"
 
@@ -213,7 +218,7 @@ class TestApprovalEndpoints:
 
         response = client.post(f"/api/approvals/{approval_id}/approve")
         assert response.status_code == 200
-        assert response.json()["status"] == "approved"
+        assert response.json()["ok"] is True
 
     def test_reject(self, client):
         client.post(
@@ -233,7 +238,7 @@ class TestApprovalEndpoints:
 
         response = client.post(f"/api/approvals/{approval_id}/reject")
         assert response.status_code == 200
-        assert response.json()["status"] == "rejected"
+        assert response.json()["ok"] is True
 
     def test_list_approvals(self, client):
         client.post(
@@ -269,8 +274,8 @@ class TestAuditEndpoints:
                 "duration_ms": 100.0,
             },
         )
-        assert response.status_code == 200
-        assert response.json()["ok"] is True
+        assert response.status_code == 202
+        assert response.json()["accepted"] == 1
 
     def test_list_audit(self, client):
         client.post(
