@@ -24,14 +24,45 @@ name = "anqush"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "fastapi" },
     { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+adapters = [
     { name = "langgraph" },
     { name = "mcp" },
     { name = "openai" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
+]
+all = [
+    { name = "fastapi" },
+    { name = "langgraph" },
+    { name = "mcp" },
+    { name = "openai" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
     { name = "uvicorn" },
+]
+dev = [
+    { name = "fastapi" },
+    { name = "langgraph" },
+    { name = "mcp" },
+    { name = "openai" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "uvicorn" },
+]
+langgraph = [
+    { name = "langgraph" },
+]
+mcp = [
+    { name = "mcp" },
+]
+openai = [
+    { name = "openai" },
 ]
 
 [package.dev-dependencies]
@@ -44,14 +75,20 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "anqush", extras = ["adapters"], marker = "extra == 'dev'" },
+    { name = "anqush", extras = ["dev"], marker = "extra == 'all'" },
+    { name = "anqush", extras = ["openai", "langgraph", "mcp"], marker = "extra == 'adapters'" },
+    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.110.0" },
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "langgraph", specifier = ">=1.2.4" },
-    { name = "mcp", specifier = ">=1.27.2" },
-    { name = "openai", specifier = ">=1.0.0" },
+    { name = "langgraph", marker = "extra == 'langgraph'", specifier = ">=1.2.4" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.27.2" },
+    { name = "openai", marker = "extra == 'openai'", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.4.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "uvicorn", specifier = ">=0.29.0" },
+    { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.29.0" },
 ]
 
 [package.metadata.requires-dev]
