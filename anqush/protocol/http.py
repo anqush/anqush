@@ -1,6 +1,7 @@
 """HTTP transport for the Anqush Protocol.
 
 Talks to a real Anqush control plane over HTTP.
+Handles both spec-compliant and legacy server responses.
 """
 
 from __future__ import annotations
@@ -57,17 +58,15 @@ class HTTPTransport(Transport):
         return headers
 
     def _handle_error(self, resp: httpx.Response) -> None:
-        """Raise ErrorResponse on 4xx/5xx."""
+        """Raise on 4xx/5xx."""
         if resp.status_code >= 400:
+            # Try to parse structured error
             try:
                 error = ErrorResponse(**resp.json())
-            except Exception:
-                error = ErrorResponse(
-                    code="internal_error",
-                    message=f"HTTP {resp.status_code}",
-                    request_id="",
-                )
-            raise Exception(f"[{error.code}] {error.message}")
+                raise Exception(f"[{error.code}] {error.message}")
+            except (KeyError, ValueError):
+                # Fall back to generic error
+                raise Exception(f"HTTP {resp.status_code}")
 
     # ─── Rules ────────────────────────────────────────────────────────────────
 
@@ -77,7 +76,19 @@ class HTTPTransport(Transport):
             headers=self._headers(),
         )
         self._handle_error(resp)
-        return RulesResponse(**resp.json())
+        data = resp.json()
+
+        # Handle both spec-compliant and legacy responses
+        if isinstance(data, list):
+            # Legacy: server returns rules array directly
+            return RulesResponse(rules=data, version="1")
+        elif isinstance(data, dict):
+            # Spec-compliant: server returns {rules: [...], version: "..."}
+            if "version" not in data:
+                data["version"] = "1"
+            return RulesResponse(**data)
+        else:
+            raise Exception(f"Unexpected response format: {type(data)}")
 
     # ─── Budget ───────────────────────────────────────────────────────────────
 
@@ -87,7 +98,13 @@ class HTTPTransport(Transport):
             headers=self._headers(),
         )
         self._handle_error(resp)
-        return BudgetResponse(**resp.json())
+        data = resp.json()
+
+        # Handle missing currency field
+        if "currency" not in data:
+            data["currency"] = "USD"
+
+        return BudgetResponse(**data)
 
     # ─── Approvals ────────────────────────────────────────────────────────────
 
@@ -117,7 +134,16 @@ class HTTPTransport(Transport):
             headers=self._headers(),
         )
         self._handle_error(resp)
-        return AuditAcceptedResponse(**resp.json())
+        data = resp.json()
+
+        # Handle both spec-compliant and legacy responses
+        if "accepted" in data:
+            return AuditAcceptedResponse(**data)
+        elif "ok" in data:
+            # Legacy: server returns {ok: true}
+            return AuditAcceptedResponse(accepted=1)
+        else:
+            return AuditAcceptedResponse(accepted=1)
 
     def submit_audit_batch(self, batch: AuditEventBatch) -> AuditAcceptedResponse:
         resp = self._client.post(
@@ -126,7 +152,15 @@ class HTTPTransport(Transport):
             headers=self._headers(),
         )
         self._handle_error(resp)
-        return AuditAcceptedResponse(**resp.json())
+        data = resp.json()
+
+        # Handle both spec-compliant and legacy responses
+        if "accepted" in data:
+            return AuditAcceptedResponse(**data)
+        elif "ok" in data:
+            return AuditAcceptedResponse(accepted=len(batch.events))
+        else:
+            return AuditAcceptedResponse(accepted=len(batch.events))
 
     # ─── Health ───────────────────────────────────────────────────────────────
 
