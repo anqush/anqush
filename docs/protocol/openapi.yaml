@@ -1,0 +1,720 @@
+openapi: 3.1.0
+info:
+  title: Anqush Protocol
+  version: "1.0.0"
+  description: |
+    The Anqush Protocol is the open contract between the Anqush SDK (runs in
+    the agent's process) and an Anqush-compatible control plane.
+
+    The SDK has four jobs that talk to a control plane:
+
+    1. **Fetch rules** for an agent and evaluate them locally against each tool call.
+    2. **Fetch budget** for an agent and refuse to execute tool calls that would exceed the limit.
+    3. **Request approval** when a tool call matches an `approval` rule, and wait (via polling or webhook callback) for a human to resolve it.
+    4. **Submit audit events** for every tool call — blocked, approved, executed, errored — to a tamper-evident log.
+
+    Everything else (multi-tenancy, billing, dashboard, Slack notifications,
+    team management) is implementation detail of the hosted product, not part
+    of the protocol.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: https://api.anqush.dev/v1
+    description: Hosted control plane (api.anqush.dev)
+  - url: http://localhost:8000/v1
+    description: Local reference server (anqush-server)
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Rules
+    description: Fetch runtime rules for an agent
+  - name: Budget
+    description: Fetch budget limits and current spend
+  - name: Approvals
+    description: Human-in-the-loop approval lifecycle
+  - name: Audit
+    description: Tool call audit event submission
+
+paths:
+  # ─── Rules ────────────────────────────────────────────────────────────────
+  /agents/{agent_id}/rules:
+    get:
+      operationId: getRules
+      summary: Fetch rules for an agent
+      description: |
+        Returns the current set of runtime rules for the specified agent.
+        Rules are evaluated in array order by the SDK; the first match wins.
+        If both a `block` and an `approval` rule match, `block` wins.
+
+        The response includes a `version` string that changes when rules
+        are modified. The SDK can use this for cache invalidation.
+      tags: [Rules]
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Rules fetched successfully
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "max-age=30"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/AgentNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ─── Budget ───────────────────────────────────────────────────────────────
+  /agents/{agent_id}/budget:
+    get:
+      operationId: getBudget
+      summary: Fetch budget for an agent
+      description: |
+        Returns the budget limits and current spend for the specified agent.
+        A `null` for either limit means "no cap." The SDK must NOT treat
+        `null` as 0.
+      tags: [Budget]
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Budget fetched successfully
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "max-age=10"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/AgentNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ─── Approvals ────────────────────────────────────────────────────────────
+  /approvals:
+    post:
+      operationId: createApproval
+      summary: Request human approval for a tool call
+      description: |
+        Creates a pending approval request. The server returns an approval
+        object with `status: "pending"`. The SDK then polls `GET
+        /approvals/{id}` or waits for a callback.
+
+        If `callback_url` is provided, the server will POST the resolution
+        to that URL with an `X-Anqush-Signature` header (HMAC-SHA256).
+        The agent MUST verify the signature before acting on the callback.
+
+        The `context` object is optional metadata (e.g., agent goal, chain
+        of thought) displayed to the human approver.
+      tags: [Approvals]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalCreateRequest"
+      responses:
+        "201":
+          description: Approval request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalResponse"
+        "200":
+          description: |
+            Returned when a request with the same `Idempotency-Key` was
+            previously created. Body is the existing approval, not a new one.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /approvals/{approval_id}:
+    get:
+      operationId: getApproval
+      summary: Poll approval status
+      description: |
+        Returns the current state of an approval request. The SDK polls
+        this endpoint until `status` is `approved` or `rejected`, or
+        until a timeout is reached.
+      tags: [Approvals]
+      parameters:
+        - $ref: "#/components/parameters/ApprovalId"
+      responses:
+        "200":
+          description: Approval status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /approvals/{approval_id}/resolve:
+    post:
+      operationId: resolveApproval
+      summary: Resolve an approval request
+      description: |
+        Approves or rejects a pending approval. Typically called by the
+        dashboard or a webhook, not by the SDK directly.
+      tags: [Approvals]
+      parameters:
+        - $ref: "#/components/parameters/ApprovalId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalResolveRequest"
+      responses:
+        "200":
+          description: Approval resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Approval already resolved (not pending)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ─── Health ──────────────────────────────────────────────────────────────
+  /health:
+    get:
+      operationId: health
+      summary: Liveness probe
+      description: |
+        Returns `ok` if the control plane is reachable. The SDK MAY call this
+        on startup to fail fast rather than discovering the server is down via
+        5xx timeouts on the first real call.
+      security: []
+      responses:
+        "200":
+          description: Control plane is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, degraded]
+                  version:
+                    type: string
+                    description: Server implementation version (informational).
+
+  # ─── Audit ────────────────────────────────────────────────────────────────
+  /audit:
+    post:
+      operationId: submitAuditEvent
+      summary: Submit audit event(s)
+      description: |
+        Submits one or more audit events to the control plane. Use
+        `kind: "single"` for one event or `kind: "batch"` for multiple.
+        Batch submissions are committed atomically — any validation
+        failure rejects the entire batch with 400 and a `rejected` array.
+
+        Audit is best-effort: the SDK must not break if this call fails.
+        The `occurred_at` field is the timestamp of the tool call; the
+        server uses it for ordering, not ingestion time.
+      tags: [Audit]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/AuditEvent"
+                - $ref: "#/components/schemas/AuditEventBatch"
+              discriminator:
+                propertyName: kind
+      responses:
+        "202":
+          description: Audit event(s) accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditAcceptedResponse"
+        "400":
+          description: Validation error (batch)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ErrorResponse"
+                  - type: object
+                    properties:
+                      rejected:
+                        type: array
+                        items:
+                          type: integer
+                        description: Indexes of rejected events in the batch
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/BatchTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+# ─── Components ──────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Project-scoped API key. Format: `ak_proj_<id>`.
+        Passed as `Authorization: Bearer ak_proj_abc123`.
+
+  parameters:
+    AgentId:
+      name: agent_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique agent identifier
+
+    ApprovalId:
+      name: approval_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique approval request identifier
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: |
+        Optional idempotency key for safe retries. The server deduplicates
+        requests with the same key for 24 hours. If a reused key is sent
+        with a different body, the server returns 409 Conflict.
+
+  schemas:
+    # ─── Rules ──────────────────────────────────────────────────────────────
+    Rule:
+      type: object
+      required: [id, name, action, tool]
+      properties:
+        id:
+          type: string
+          description: Unique rule identifier
+        name:
+          type: string
+          description: Human-readable rule name
+        action:
+          type: string
+          enum: [block, approval]
+          description: |
+            - `block`: tool call is rejected immediately with a reason
+            - `approval`: tool call is paused until a human approves/rejects
+        tool:
+          type: string
+          description: |
+            Tool name pattern. Supports `*` wildcard and `.*` suffix
+            (e.g., `stripe.*` matches `stripe.refund`).
+        when:
+          type: object
+          additionalProperties: true
+          description: |
+            Conditions evaluated against tool call parameters. Supports
+            operators: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`,
+            `contains`, `starts_with`.
+        reason:
+          type: string
+          nullable: true
+          description: Human-readable reason shown when rule triggers
+
+    RulesResponse:
+      type: object
+      required: [rules, version]
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/Rule"
+          description: |
+            Rules in evaluation order. First match wins. If both a block
+            and approval rule match, block wins.
+        version:
+          type: string
+          description: |
+            Cache version string. Changes when rules are modified. The SDK
+            can use this for cache invalidation.
+
+    # ─── Budget ─────────────────────────────────────────────────────────────
+    BudgetResponse:
+      type: object
+      required: [agent_id, session_spend, daily_spend, currency]
+      properties:
+        agent_id:
+          type: string
+        max_session_cost:
+          type: number
+          format: float
+          nullable: true
+          description: Maximum cost per session. null = no cap.
+        max_daily_cost:
+          type: number
+          format: float
+          nullable: true
+          description: Maximum cost per day. null = no cap.
+        session_spend:
+          type: number
+          format: float
+          description: Current session spend
+        daily_spend:
+          type: number
+          format: float
+          description: Current day spend
+        currency:
+          type: string
+          default: USD
+          description: ISO 4217 currency code
+
+    # ─── Approvals ──────────────────────────────────────────────────────────
+    ApprovalCreateRequest:
+      type: object
+      required: [agent_id, tool, params, rule]
+      properties:
+        agent_id:
+          type: string
+        tool:
+          type: string
+          description: Tool name being approved
+        params:
+          type: object
+          additionalProperties: true
+          description: Tool call parameters
+        rule:
+          type: object
+          additionalProperties: true
+          description: The rule that triggered this approval
+        callback_url:
+          type: string
+          format: uri
+          nullable: true
+          description: |
+            Optional URL for the server to POST the resolution to.
+            The POST includes `X-Anqush-Signature` (HMAC-SHA256) for
+            verification.
+        timeout_seconds:
+          type: number
+          default: 300
+          description: How long the SDK waits before treating timeout as rejection
+        context:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: |
+            Optional metadata for the human approver (e.g., agent goal,
+            chain of thought summary).
+
+    ApprovalResolveRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [approved, rejected]
+        resolved_by:
+          type: string
+          nullable: true
+          description: Identity of the person who resolved this approval
+        comment:
+          type: string
+          nullable: true
+          description: Optional comment from the approver
+
+    ApprovalResponse:
+      type: object
+      required: [id, agent_id, tool, params, rule, status, created_at]
+      properties:
+        id:
+          type: string
+        agent_id:
+          type: string
+        tool:
+          type: string
+        params:
+          type: object
+          additionalProperties: true
+        rule:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [pending, approved, rejected, expired, cancelled]
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_by:
+          type: string
+          nullable: true
+        comment:
+          type: string
+          nullable: true
+        resume_url:
+          type: string
+          format: uri
+          nullable: true
+          description: |
+            Convenience URL for polling: `GET /approvals/{id}`. The SDK can
+            use this or reconstruct it from the approval id.
+
+    # ─── Audit ──────────────────────────────────────────────────────────────
+    AuditEvent:
+      type: object
+      required: [agent_id, tool, params, status]
+      properties:
+        kind:
+          type: string
+          enum: [single]
+          default: single
+          description: Discriminator for single vs batch. Defaults to `single`.
+        agent_id:
+          type: string
+        tool:
+          type: string
+        params:
+          type: object
+          additionalProperties: true
+          description: Tool call parameters
+        result:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: string
+            - type: number
+            - type: boolean
+            - type: "null"
+          nullable: true
+          description: Tool call result (truncated if large)
+        status:
+          type: string
+          enum: [success, blocked, rejected, error]
+          description: Outcome of the tool call
+        reason:
+          type: string
+          nullable: true
+          description: |
+            Why the call was blocked/rejected, or error message.
+        cost:
+          type: number
+          format: float
+          default: 0
+          description: Estimated cost of the tool call
+        duration_ms:
+          type: number
+          format: float
+          default: 0
+          description: Wall-clock duration of the tool call
+        occurred_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Timestamp of the actual tool call (not ingestion time).
+            Server uses this for ordering.
+        approval_id:
+          type: string
+          nullable: true
+          description: Associated approval request ID, if any
+
+    AuditEventBatch:
+      type: object
+      required: [kind, events]
+      properties:
+        kind:
+          type: string
+          enum: [batch]
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+          minItems: 1
+          maxItems: 100
+          description: Array of audit events (max 100 per batch)
+
+    AuditAcceptedResponse:
+      type: object
+      required: [accepted]
+      properties:
+        accepted:
+          type: integer
+          description: Number of events accepted
+
+    # ─── Errors ─────────────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+          description: |
+            Stable machine-readable error code. Do not localize.
+            Do not change without a major version bump.
+          enum:
+            - invalid_request
+            - invalid_rule
+            - unauthorized
+            - forbidden
+            - agent_not_found
+            - not_found
+            - conflict
+            - batch_too_large
+            - rate_limited
+            - internal_error
+            - unavailable
+        message:
+          type: string
+          description: Human-readable error description
+        request_id:
+          type: string
+          description: Unique request identifier for debugging
+
+  responses:
+    BadRequest:
+      description: Malformed request or missing required field
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: invalid_request
+            message: "Missing required field: tool"
+            request_id: req_01HZ7KABCD
+
+    Unauthorized:
+      description: Missing or malformed Authorization header
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: unauthorized
+            message: "Invalid or missing Bearer token"
+            request_id: req_01HZ7KABCD
+
+    Forbidden:
+      description: Token does not have access to this agent/project
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: forbidden
+            message: "Token does not have access to agent 'billing-bot'"
+            request_id: req_01HZ7KABCD
+
+    AgentNotFound:
+      description: Agent ID does not exist for this token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: agent_not_found
+            message: "No agent with id 'billing-bot' visible to this token"
+            request_id: req_01HZ7KABCD
+
+    NotFound:
+      description: Resource not found (approval, rule, etc.)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: not_found
+            message: "Approval 'apr_8x7k2m' not found"
+            request_id: req_01HZ7KABCD
+
+    Conflict:
+      description: Idempotency-Key reused with different body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: conflict
+            message: "Idempotency key reused with different request body"
+            request_id: req_01HZ7KABCD
+
+    BatchTooLarge:
+      description: Audit batch exceeds 100 events
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: batch_too_large
+            message: "Audit batch cannot exceed 100 events"
+            request_id: req_01HZ7KABCD
+
+    InternalError:
+      description: Server error (safe to retry)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: internal_error
+            message: "An unexpected error occurred"
+            request_id: req_01HZ7KABCD
