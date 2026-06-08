@@ -1,0 +1,16 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+*.db
+*.db-shm
+*.db-wal
+.env
+.vscode
+.idea
+node_modules
+dist
+build
+*.egg-info
