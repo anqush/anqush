@@ -1,15 +1,58 @@
-__pycache__
-*.pyc
-*.pyo
-.venv
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+*.whl
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing / Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Type checking / Linting
+.mypy_cache/
+.ruff_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# SQLite
 *.db
 *.db-shm
 *.db-wal
-.env
-.vscode
-.idea
-node_modules
-dist
-build
-*.egg-info
+
+# Logs
+*.log
+
+# Node (for any frontend tooling)
+node_modules/
+
+# Data
 data/
