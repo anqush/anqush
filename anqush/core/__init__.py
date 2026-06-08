@@ -3,7 +3,6 @@
 from .models import (
     ToolCall,
     AuditEvent,
-    ApprovalRequest,
     ToolBlockedError,
     ToolRejectedError,
     BudgetExceededError,
@@ -16,7 +15,6 @@ from .approvals import ApprovalClient
 __all__ = [
     "ToolCall",
     "AuditEvent",
-    "ApprovalRequest",
     "ToolBlockedError",
     "ToolRejectedError",
     "BudgetExceededError",

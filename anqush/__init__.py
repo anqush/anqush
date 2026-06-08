@@ -9,11 +9,18 @@ from .core.audit import AuditLogger
 from .core.budget import BudgetTracker
 from .core.models import (
     ToolCall,
-    AuditEvent,
-    ApprovalRequest,
     ToolBlockedError,
     ToolRejectedError,
     BudgetExceededError,
+)
+from .protocol.types import (
+    AuditEvent,
+    AuditStatus,
+    Rule,
+    RuleAction,
+    ApprovalCreateRequest,
+    ApprovalResponse,
+    ApprovalStatus,
 )
 
 __all__ = [
@@ -29,9 +36,15 @@ __all__ = [
     "BudgetTracker",
     # Models
     "ToolCall",
-    "AuditEvent",
-    "ApprovalRequest",
     "ToolBlockedError",
     "ToolRejectedError",
     "BudgetExceededError",
+    # Protocol types
+    "AuditEvent",
+    "AuditStatus",
+    "Rule",
+    "RuleAction",
+    "ApprovalCreateRequest",
+    "ApprovalResponse",
+    "ApprovalStatus",
 ]

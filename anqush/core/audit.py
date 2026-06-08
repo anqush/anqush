@@ -61,7 +61,7 @@ class AuditLogger:
         try:
             httpx.post(
                 urljoin(self.server_url, "/api/audit"),
-                json=event.to_dict(),
+                json=event.model_dump(exclude_none=True),
                 headers=self._headers(),
                 timeout=2.0,
             )

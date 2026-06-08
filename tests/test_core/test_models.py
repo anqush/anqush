@@ -3,12 +3,16 @@
 import pytest
 
 from anqush.core.models import (
-    ApprovalRequest,
     AuditEvent,
     BudgetExceededError,
     ToolBlockedError,
     ToolCall,
     ToolRejectedError,
+)
+from anqush.protocol.types import (
+    ApprovalCreateRequest,
+    ApprovalResponse,
+    ApprovalStatus,
 )
 
 
@@ -57,7 +61,7 @@ class TestToolCall:
 
 
 class TestAuditEvent:
-    """Tests for AuditEvent dataclass."""
+    """Tests for AuditEvent (protocol type)."""
 
     def test_creation(self):
         event = AuditEvent(
@@ -79,28 +83,38 @@ class TestAuditEvent:
             reason="blocked by rule",
             cost=0.5,
         )
-        d = event.to_dict()
+        d = event.model_dump()
         assert d["status"] == "blocked"
         assert d["reason"] == "blocked by rule"
         assert d["cost"] == 0.5
 
 
-class TestApprovalRequest:
-    """Tests for ApprovalRequest dataclass."""
+class TestApprovalTypes:
+    """Tests for approval protocol types."""
 
-    def test_creation(self):
-        req = ApprovalRequest(
-            id="abc-123",
+    def test_create_request(self):
+        req = ApprovalCreateRequest(
             agent_id="a",
             tool="refund",
             params={"amount": 500},
             rule={"name": "large-refund"},
         )
-        assert req.id == "abc-123"
-        assert req.status == "pending"
+        assert req.agent_id == "a"
+        assert req.tool == "refund"
+        assert req.timeout_seconds == 300.0
 
-    def test_default_status(self):
-        req = ApprovalRequest(
-            id="x", agent_id="a", tool="t", params={}, rule={}
+    def test_response_pending(self):
+        from datetime import datetime, timezone
+
+        resp = ApprovalResponse(
+            id="abc-123",
+            agent_id="a",
+            tool="refund",
+            params={"amount": 500},
+            rule={"name": "large-refund"},
+            status=ApprovalStatus.PENDING,
+            created_at=datetime.now(timezone.utc),
         )
-        assert req.status == "pending"
+        assert resp.id == "abc-123"
+        assert resp.status == ApprovalStatus.PENDING
+        assert resp.resolved_at is None

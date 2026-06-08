@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 
 import httpx
 
-from .models import ApprovalRequest
+
 
 
 class ApprovalClient:

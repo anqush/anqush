@@ -1,9 +1,21 @@
-"""Shared data types and exceptions for Anqush core."""
+"""Shared data types and exceptions for Anqush core.
+
+Protocol types are imported from anqush.protocol.types.
+SDK-specific types (exceptions, internal helpers) live here.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
+
+# Re-export protocol types for backward compatibility
+from anqush.protocol.types import (
+    AuditEvent,
+    AuditStatus,
+    Rule,
+    RuleAction,
+)
 
 
 # ─── Exceptions ───────────────────────────────────────────────────────────────
@@ -39,12 +51,12 @@ class BudgetExceededError(Exception):
         )
 
 
-# ─── Data Types ───────────────────────────────────────────────────────────────
+# ─── Internal Types ──────────────────────────────────────────────────────────
 
 
 @dataclass
 class ToolCall:
-    """Represents an intercepted tool call."""
+    """Represents an intercepted tool call (internal to the SDK)."""
 
     name: str
     params: dict[str, Any]
@@ -56,41 +68,3 @@ class ToolCall:
             "params": self.params,
             "agent_id": self.agent_id,
         }
-
-
-@dataclass
-class AuditEvent:
-    """An audit log entry for a tool call."""
-
-    agent_id: str
-    tool: str
-    params: dict[str, Any]
-    status: str  # "success" | "blocked" | "rejected" | "error"
-    result: Any = None
-    reason: str | None = None
-    cost: float = 0.0
-    duration_ms: float = 0.0
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "agent_id": self.agent_id,
-            "tool": self.tool,
-            "params": self.params,
-            "status": self.status,
-            "result": self.result,
-            "reason": self.reason,
-            "cost": self.cost,
-            "duration_ms": self.duration_ms,
-        }
-
-
-@dataclass
-class ApprovalRequest:
-    """A pending approval request."""
-
-    id: str
-    agent_id: str
-    tool: str
-    params: dict[str, Any]
-    rule: dict[str, Any]
-    status: str = "pending"  # "pending" | "approved" | "rejected"
