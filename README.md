@@ -6,18 +6,16 @@ The name comes from **अंकुश (aṅkuśa)**, the elephant goad — a too
 
 **Status:** Phase 1 complete — Multi-framework SDK (OpenAI, LangGraph, MCP). Hosted SaaS on roadmap.
 
-## What's Open, What's Closed
+## What's What
 
-| Component | Repo | License | Visibility |
-|-----------|------|---------|------------|
-| **SDK** (`pip install anqush`) | [anqush/anqush](https://github.com/anqush/anqush) | Apache-2.0 | Public |
-| **Protocol spec** (`openapi.yaml`) | [anqush/anqush](https://github.com/anqush/anqush) | Apache-2.0 | Public |
-| **Reference server** | [anqush/anqush-server](https://github.com/anqush/anqush-server) | Apache-2.0 | Public |
-| **Hosted control plane** (`api.anqush.dev`) | [anqush/anqush-cloud](https://github.com/anqush/anqush-cloud) | Proprietary | Private |
+| Component | Repo | License | Type |
+|-----------|------|---------|------|
+| **SDK** (`pip install anqush`) | [anqush/anqush](https://github.com/anqush/anqush) | Apache-2.0 | Open source |
+| **Protocol spec** (`openapi.yaml`) | [anqush/anqush](https://github.com/anqush/anqush) | Apache-2.0 | Open spec |
+| **Reference server** | [anqush/anqush-server](https://github.com/anqush/anqush-server) | Apache-2.0 | Self-hostable |
+| **Hosted control plane** (`api.anqush.dev`) | — | Proprietary | Managed service (multi-tenant, async approvals, team management) |
 
-**The protocol is open. The SaaS is closed.**
-
-Anyone can implement a compatible control plane. The SDK makes no assumptions beyond what is documented in the [protocol spec](docs/protocol/openapi.yaml). See [IMPLEMENTATIONS.md](docs/protocol/IMPLEMENTATIONS.md) for a list of known servers.
+The protocol is open, so you can use our hosted service or run your own compatible control plane. The SDK works with any server that implements the [protocol spec](docs/protocol/openapi.yaml). See [IMPLEMENTATIONS.md](docs/protocol/IMPLEMENTATIONS.md) for known servers.
 
 ---
 
