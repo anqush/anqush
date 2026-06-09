@@ -1,6 +1,13 @@
 version = 1
 requires-python = ">=3.11"
 
+[manifest]
+members = [
+    "anqush",
+    "anqush-server",
+    "anqush-workspace",
+]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.4"
@@ -22,7 +29,7 @@ wheels = [
 [[package]]
 name = "anqush"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "sdk-python" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
@@ -75,9 +82,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anqush", extras = ["adapters"], marker = "extra == 'dev'" },
-    { name = "anqush", extras = ["dev"], marker = "extra == 'all'" },
-    { name = "anqush", extras = ["openai", "langgraph", "mcp"], marker = "extra == 'adapters'" },
+    { name = "anqush", extras = ["adapters"], marker = "extra == 'dev'", editable = "sdk-python" },
+    { name = "anqush", extras = ["dev"], marker = "extra == 'all'", editable = "sdk-python" },
+    { name = "anqush", extras = ["openai", "langgraph", "mcp"], marker = "extra == 'adapters'", editable = "sdk-python" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.110.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "langgraph", marker = "extra == 'langgraph'", specifier = ">=1.2.4" },
@@ -97,6 +104,46 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
+]
+
+[[package]]
+name = "anqush-server"
+version = "0.1.0"
+source = { editable = "server" }
+dependencies = [
+    { name = "anqush" },
+    { name = "fastapi" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anqush", editable = "sdk-python" },
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.0" },
+    { name = "uvicorn", specifier = ">=0.29.0" },
+]
+
+[[package]]
+name = "anqush-workspace"
+version = "0.0.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "anqush", extra = ["dev"] },
+    { name = "anqush-server" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anqush", extras = ["dev"], editable = "sdk-python" },
+    { name = "anqush-server", editable = "server" },
 ]
 
 [[package]]
@@ -694,7 +741,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "1.4.1"
+version = "1.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpatch" },
@@ -707,9 +754,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/80/c1/276a0d704440490fb0d27ce25e556872ca420d285b9d00eb823374717897/langchain_core-1.4.1.tar.gz", hash = "sha256:8234eb8cd3200f690e278159b7d7cee5976381ec90ece7b48db8d8e8850ab37d", size = 932675 }
+sdist = { url = "https://files.pythonhosted.org/packages/de/13/446580dc9f26e4e524d57f727a9007b4c2484decd2c00269b7fd4f51326d/langchain_core-1.4.2.tar.gz", hash = "sha256:242abe763db71de05fe0d7ecff03f9cc6022fbceba8be15902fb89e35b7292f9", size = 935103 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/79/531d8ee5dc5bf464c18cc86b087569307bc2d6b74548753f26122d08746d/langchain_core-1.4.1-py3-none-any.whl", hash = "sha256:e5dee06e70c123cb98cb0158e4416efac1e386ff47a484901ccf88555e28eec6", size = 549118 },
+    { url = "https://files.pythonhosted.org/packages/d0/2c/92a6a6f5af07f1c347021d81aea307d405ed9d34a4f8ea6b78cfa3c3b189/langchain_core-1.4.2-py3-none-any.whl", hash = "sha256:a2906d339514e02a46d6c0888021dd2651ed5acc661a1f546fe33e1453adfcb9", size = 550103 },
 ]
 
 [[package]]
@@ -785,7 +832,7 @@ wheels = [
 
 [[package]]
 name = "langsmith"
-version = "0.8.9"
+version = "0.8.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -799,9 +846,9 @@ dependencies = [
     { name = "xxhash" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e4/dd/f4c8a12987318e505b10760d30c3c2d45e8dc87ba8f47a004c753a9e7b35/langsmith-0.8.9.tar.gz", hash = "sha256:f16e37fcd5a8a2d4db30eae0e399a866a65ce5cc86218825c59409ed57a3bf53", size = 4428684 }
+sdist = { url = "https://files.pythonhosted.org/packages/ea/0d/082410ece26ff9f3ed4f87b014a8675be47cbd7d65f06b922045dfc21c47/langsmith-0.8.11.tar.gz", hash = "sha256:d9b3496f8f7ca63f4f2d1dfd368afd6c527923fff2ce4026c82ce85f37db3965", size = 4495842 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/2f/a701663c9fb4d9630448622a684bc372b4905b9a6dbe2297d55a70fde04e/langsmith-0.8.9-py3-none-any.whl", hash = "sha256:c9519cabc75568d088df045710d1b86eae9780c91054528b2aa7e6cb1fc80c52", size = 403165 },
+    { url = "https://files.pythonhosted.org/packages/b4/65/f9c9dc19b21a9076286fafdb0ab732c9019ddf71aa7e7d720a830a98fe2a/langsmith-0.8.11-py3-none-any.whl", hash = "sha256:08aa5e84b00703ecc11dbeafda78d84b92da4e8c6114e0be9b59df9e71afc59b", size = 478985 },
 ]
 
 [[package]]

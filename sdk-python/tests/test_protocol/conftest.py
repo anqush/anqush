@@ -20,7 +20,18 @@ import os
 import pytest
 
 from anqush.protocol.http import HTTPTransport
+
+
 from anqush.protocol.transport import Transport
+
+
+# Automatically mark all protocol tests as requiring a live server
+# Run with: pytest -m "not protocol" to skip
+# Run with: pytest -m protocol to run only contract tests
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if "test_protocol" in item.nodeid:
+            item.add_marker("protocol")
 
 
 @pytest.fixture

@@ -1,0 +1,19 @@
+{
+  "name": "@anqush/sdk",
+  "version": "0.1.0",
+  "description": "Anqush TypeScript SDK — runtime control layer for AI agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist/"],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "ts-jest": "^29.0.0"
+  }
+}

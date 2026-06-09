@@ -1,61 +1,15 @@
 [project]
-name = "anqush"
-version = "0.1.0"
-description = "Control layer for AI agents with budget limits, approval workflows, and audit logging."
-readme = "README.md"
+name = "anqush-workspace"
+version = "0.0.0"
 requires-python = ">=3.11"
-license = "Apache-2.0"
 dependencies = [
-    "httpx>=0.27.0",
-    "pydantic>=2.0.0",
-    "pyyaml>=6.0",
+    "anqush[dev]",
+    "anqush-server",
 ]
 
-[project.optional-dependencies]
-# Framework adapters
-openai = ["openai>=1.0.0"]
-langgraph = ["langgraph>=1.2.4"]
-mcp = ["mcp>=1.27.2"]
+[tool.uv.workspace]
+members = ["sdk-python", "server"]
 
-# All adapters
-adapters = ["anqush[openai,langgraph,mcp]"]
-
-# Development (includes server for testing)
-dev = [
-    "anqush[adapters]",
-    "fastapi>=0.110.0",
-    "uvicorn>=0.29.0",
-    "pytest>=9.0.3",
-    "pytest-asyncio>=1.4.0",
-    "pytest-cov>=7.1.0",
-]
-
-# Everything
-all = ["anqush[dev]"]
-
-[tool.uv]
-package = false
-
-[dependency-groups]
-dev = [
-    "httpx>=0.28.1",
-    "pytest>=9.0.3",
-    "pytest-asyncio>=1.4.0",
-    "pytest-cov>=7.1.0",
-]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
-[tool.coverage.run]
-source = ["anqush"]
-omit = [
-    "anqush/approvals.py",
-    "anqush/audit.py",
-    "anqush/client.py",
-    "anqush/rules.py",
-]
-
-[tool.coverage.report]
-show_missing = true
-fail_under = 80
+[tool.uv.sources]
+anqush = { workspace = true }
+anqush-server = { workspace = true }

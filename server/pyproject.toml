@@ -1,0 +1,30 @@
+[project]
+name = "anqush-server"
+version = "0.1.0"
+description = "Self-hostable reference implementation of the Anqush Protocol."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = [
+    "anqush",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.0",
+    "httpx>=0.27.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+packages = ["server"]
+
+[tool.uv.sources]
+anqush = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
